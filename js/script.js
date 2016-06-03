@@ -40,15 +40,16 @@
   function parseData(data) {
     var days = data.forecast.days;
     var datasets = [
-      {name: 'temperature', values: []},
-      {name: 'dewpoint', values: []},
-      {name: 'feelslike', values: []},
-      {name: 'pressure', values: []},
-      {name: 'humidity', values: []},
-      {name: 'cloudcover', values: []},
-      {name: 'pop', values: []},
-      {name: 'liquid_precip', values: []},
-      {name: 'wind_speed', values: []}
+      {name: 'temperature', type: 'line', color: '#d6212a', values: []},
+      {name: 'dewpoint', type: 'line', color: '#5b9f4a', values: []},
+      {name: 'feelslike', type: 'line', color: '#ad55a1', values: []},
+      {name: 'pressure', type: 'line', color: '#1e2023', values: []},
+      {name: 'humidity', type: 'line', color: '#87c404', values: []},
+      {name: 'cloudcover', type: 'area', color: '#8e8f91', values: []},
+      {name: 'pop', type: 'area', color: '#16aadc', values: []},
+      {name: 'liquid_precip', type: 'area', color: '#0074a2', values: []},
+      {name: 'wind_speed', type: 'line', color: '#002f80', values: []},
+      {name: 'wind_dir', type: 'other', color: '', values: []}
     ];
     days.forEach(function(d) {
       hours = hours.concat(d.hours);
@@ -67,8 +68,9 @@
 
     return [
       [datasets[0],datasets[1],datasets[2]],
-      [datasets[3],datasets[4],datasets[5],datasets[6],datasets[7]],
-      [datasets[8],datasets[9],datasets[10]]
+      [datasets[3],datasets[4],datasets[5],datasets[6]],
+      [datasets[7]],
+      [datasets[8], datasets[9]]
     ];
   }
 
@@ -98,14 +100,10 @@
         .scale(y)
         .orient("left");
 
-    var color = d3.scale.category10();
+    var color = d3.scale.ordinal();
 
-    color.domain(['temperature','dewpoint','feelslike']);
-
-    var line = d3.svg.line()
-              .interpolate("basis")
-              .x(function(d) { return x(d.time); })
-              .y(function(d) { return y(d.value); });
+    color.domain(this.chartData.map(function(v) { console.log(v.name);return v.name; }));
+    color.range(this.chartData.map(function(v) { console.log(v.color);return v.color; }));
 
     console.log(this.chartData);
     x.domain(d3.extent(hours, function(d) { return d.time; }));
@@ -128,15 +126,43 @@
         .attr("class", "y axis")
         .call(yAxis);
 
-    var path = this.chartContainer.selectAll("path.temperature-line").data(this.chartData)
+    var line = d3.svg.line()
+              .interpolate("basis")
+              .x(function(d) { return x(d.time); })
+              .y(function(d) { return y(d.value); });
+
+    var area = d3.svg.area()
+              .interpolate("basis")
+              .x(function(d) { return x(d.time); })
+              .y0(function(d) { return y(d.value); })
+              .y1(this.height);
+
+    var path = this.chartContainer.selectAll("path.weather-line").data(this.chartData)
         .enter()
         .append('path')
-          .attr("class", function(d) { return 'temperature-line key-' + d.name })
-          .attr("d", function(d) { return line(d.values); } )
-          .style("stroke", function(d) { return color(d.name); })
-          .attr("stroke-width", "2")
-          .attr("fill", "none");
+          .attr("class", function(d) {
+            var className = 'weather-' + d.type;
 
+            return className + ' key-' + d.name;
+          })
+          .attr("d", function(d) {
+            if (d.type === 'line') {
+              return line(d.values);
+            } else if (d.type === 'area') {
+              return area(d.values);
+            }
+           })
+          .style("stroke", function(d) { return color(d.name); })
+          .style("fill", function(d) {
+            if (d.type === 'line') {
+              return 'none';
+            } else if (d.type === 'area') {
+              return color(d.name);
+            }
+          })
+          .attr("stroke-width", "2")
+          //.attr("fill", "none");
+/*
      var totalLength = path.node().getTotalLength();
 
       path
@@ -145,6 +171,6 @@
         .transition()
           .duration(3000)
           .ease("linear")
-          .attr("stroke-dashoffset", 0);
+          .attr("stroke-dashoffset", 0);*/
   }
 })();
