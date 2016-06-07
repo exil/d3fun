@@ -16,6 +16,7 @@
     var heights = [svgHeight * .3, svgHeight * .3, svgHeight * .2, svgHeight * .2];
     var x = d3.time.scale()
       .range([0, svgWidth]);
+
     var xAxis = d3.svg.axis()
       .scale(x)
       .orient("bottom")
@@ -47,12 +48,14 @@
        .attr("width", svgWidth)
        .attr("height", svgHeight + margin.top + margin.bottom)
        .attr('fill', 'transparent')
+       .on("mouseover", function() { svg.select('.needle').style('display','null'); svg.selectAll('.focus-point').style("display", null); })
+       .on("mouseout", function() { console.log("out");svg.select('.needle').style('display','none'); svg.selectAll('.focus-point').style("display", "none"); })
        .on("mousemove", mousemove);
 
        var needle = mousebox.append('rect')
          .attr('class', 'needle')
          .attr('width', 1)
-         .attr('height', svgHeight + margin.top + margin.bottom)
+         .attr('height', svgHeight + margin.top + margin.bottom);
 
       function mousemove() {
         var xData = temps[0][0];
@@ -61,9 +64,18 @@
         var d0 = xData.values[i - 1];
         var d1 = xData.values[i];
         var d = x0 - d0.time > d1.time - x0 ? d1 : d0;
-        console.log(d0);
+        var index = x0 - d0.time > d1.time - x0 ? i : i - 1;
 
-        needle.attr("transform", "translate(" + x(d.time) + ",0)");
+        needle.style('display', null).attr("transform", "translate(" + x(d.time) + ",0)");
+        svg.selectAll('.focus-point').attr('transform', function(datum) {
+          var xValue = datum.values[index];
+          var y = datum.y;
+          var selection = d3.select(this);
+
+          selection.select('text').text(xValue.value);
+
+          return 'translate(' + x(xValue.time) + ',' + y(xValue.value) + ')';
+        });
       }
   }
 
@@ -79,8 +91,8 @@
       {name: 'cloudcover', type: 'area', color: '#8e8f91', yAxis: 0, values: []},
       {name: 'pop', type: 'area', color: '#16aadc', yAxis: 0, values: []},
       {name: 'liquid_precip', type: 'area', color: '#0074a2', yAxis: 0, values: []},
-      {name: 'wind_speed', type: 'line', color: '#002f80', yAxis: 0, values: []},
-      {name: 'wind_dir', type: 'other', color: '', yAxis: 0, values: []}
+      {name: 'wind_speed', type: 'line', color: '#002f80', yAxis: 0, values: []}//,
+      //{name: 'wind_dir', type: 'other', color: '', yAxis: 0, values: []}
     ];
     days.forEach(function(d) {
       hours = hours.concat(d.hours);
@@ -102,11 +114,13 @@
       [datasets[0],datasets[1],datasets[2]],
       [datasets[3],datasets[4],datasets[5],datasets[6]],
       [datasets[7]],
-      [datasets[8], datasets[9]]
+      [datasets[8]]
     ];
   }
 
   function WeatherGraph(options) {
+    var _this = this;
+
     this.chartData = options.data;
     this.width = options.width;
     this.height = options.height;
@@ -123,17 +137,13 @@
     this.y1data = this.chartData.filter(function(datum) {
       return datum.yAxis === 1;
     });
-
     var y0 = d3.scale.linear()
       .range([this.height, 0]);
-
     var y1 = d3.scale.linear()
         .range([this.height, 0]);
-
     var yAxisLeft = d3.svg.axis()
         .scale(y0)
         .orient("left");
-
     var yAxisRight = d3.svg.axis()
         .scale(y1)
         .orient("right");
@@ -155,6 +165,15 @@
         d3.max(this.y1data, function(c) { return d3.max(c.values, function(v) { return v.value; }); })
       ]);
     }
+
+    // add reference to the y functions
+    this.chartData.forEach(function(chart) {
+      if (chart.yAxis === 0) {
+        chart.y = y0;
+      } else {
+        chart.y = y1;
+      }
+    });
 
     this.chartContainer = this.svg.append("g")
 			.attr('class','graph-' + this.id)
@@ -196,40 +215,54 @@
       .y0(function(d) { return y0(d.value); })
       .y1(this.height);
 
-    var path = this.chartContainer.selectAll("path.weather-line").data(this.chartData)
+    var paths = this.chartContainer.selectAll("path.weather-line").data(this.chartData)
         .enter()
-        .append('path')
-          .attr("class", function(d) {
-            var className = 'weather-' + d.type;
+        .append('g').attr('class', 'line-wrap');
 
-            return className + ' key-' + d.name;
-          })
-          .attr("d", function(d) {
-            if (d.type === 'line') {
-              return line(d.values);
-            } else if (d.type === 'area') {
-              return area(d.values);
-            }
-           })
-          .style("stroke", function(d) { return color(d.name); })
-          .style("fill", function(d) {
-            if (d.type === 'line') {
-              return 'none';
-            } else if (d.type === 'area') {
-              return color(d.name);
-            }
-          })
-          .attr("stroke-width", "2")
-          //.attr("fill", "none");
-/*
-     var totalLength = path.node().getTotalLength();
+    paths.append('path')
+      .attr("class", function(d) {
+        var className = 'weather-' + d.type;
 
-      path
-        .attr("stroke-dasharray", totalLength + " " + totalLength)
-        .attr("stroke-dashoffset", totalLength)
-        .transition()
-          .duration(3000)
-          .ease("linear")
-          .attr("stroke-dashoffset", 0);*/
+        return className + ' key-' + d.name;
+      })
+      .attr("d", function(d) {
+        if (d.type === 'line') {
+          return line(d.values);
+        } else if (d.type === 'area') {
+          return area(d.values);
+        }
+       })
+      .style("stroke", function(d) { return color(d.name); })
+      .style("fill", function(d) {
+        if (d.type === 'line') {
+          return 'none';
+        } else if (d.type === 'area') {
+          return color(d.name);
+        }
+      })
+      .attr("stroke-width", "2")
+
+      // need to append one for each circle
+      var focus = paths.append('g')
+        .attr('class', 'focus-point')
+        .style('display', 'none');
+
+      focus.append("circle")
+          .attr("r", 4.5);
+
+      focus.append("text")
+          .attr("x", 9)
+          .attr("dy", ".35em");
+
+      /*this.generatePoint = function(d) {
+        var y = y0;
+        if (d.yAxis === 0) {
+          return y0(d.value);
+        } else if (d.yAxis === 1) {
+          return y1(d.value)
+        }
+
+        return 'translate(,)';
+      }*/
   }
 })();
